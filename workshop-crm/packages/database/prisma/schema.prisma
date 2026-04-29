@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workshop {
+  id                  String        @id @default(uuid())
+  name                String
+  nif                 String?
+  phone               String
+  whatsappNumber      String?
+  subscriptionPlan    Plan          @default(BASIC)
+  subscriptionStatus  SubStatus     @default(TRIAL)
+  trialEndsAt         DateTime
+  googleCalendarToken String?
+  timezone            String        @default("Europe/Lisbon")
+  createdAt           DateTime      @default(now())
+  customers           Customer[]
+  technicians         Technician[]
+  appointments        Appointment[]
+}
+
+enum Plan { BASIC PROFESSIONAL ENTERPRISE }
+enum SubStatus { TRIAL ACTIVE SUSPENDED CANCELLED }
+enum Channel { SMS WHATSAPP EMAIL }
+enum AlertType { OIL_CHANGE TIRES FILTERS BRAKES BATTERY ANNUAL_CHECK TIMING_BELT SPARK_PLUGS }
+enum AlertStatus { PENDING SENT ACKNOWLEDGED SNOOZED CANCELLED }
+enum ApptStatus { PENDING CONFIRMED IN_PROGRESS COMPLETED CANCELLED }
+
+model Technician {
+  id           String   @id @default(uuid())
+  workshopId   String
+  workshop     Workshop @relation(fields: [workshopId], references: [id])
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("OWNER")
+  createdAt    DateTime @default(now())
+}
+
+model Customer {
+  id               String    @id @default(uuid())
+  workshopId       String
+  workshop         Workshop  @relation(fields: [workshopId], references: [id])
+  name             String
+  phone            String
+  email            String?
+  preferredChannel Channel   @default(SMS)
+  optOut           Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  vehicles         Vehicle[]
+}
+
+model Vehicle {
+  id                 String          @id @default(uuid())
+  customerId         String
+  customer           Customer        @relation(fields: [customerId], references: [id])
+  workshopId         String
+  plate              String
+  vin                String?
+  make               String
+  model              String
+  year               Int
+  engine             String?
+  kmAtRegistration   Int
+  registeredAt       DateTime        @default(now())
+  estimatedKmPerYear Int             @default(15000)
+  notes              String?
+  serviceRecords     ServiceRecord[]
+  alertSchedules     AlertSchedule[]
+  appointments       Appointment[]
+}
+
+model ServiceRecord {
+  id           String   @id @default(uuid())
+  vehicleId    String
+  vehicle      Vehicle  @relation(fields: [vehicleId], references: [id])
+  workshopId   String
+  serviceDate  DateTime
+  kmAtService  Int
+  serviceTypes String[]
+  description  String?
+  partsCost    Decimal  @db.Decimal(10, 2)
+  laborCost    Decimal  @db.Decimal(10, 2)
+  photoUrls    String[]
+  pdfReportUrl String?
+  technicianId String?
+  createdAt    DateTime @default(now())
+}
+
+model AlertSchedule {
+  id                    String       @id @default(uuid())
+  vehicleId             String
+  vehicle               Vehicle      @relation(fields: [vehicleId], references: [id])
+  alertType             AlertType
+  triggerKm             Int?
+  triggerDate           DateTime?
+  status                AlertStatus  @default(PENDING)
+  sentAt                DateTime?
+  channel               Channel      @default(SMS)
+  messageSid            String?
+  bookingToken          String       @unique @default(uuid())
+  bookingTokenExpiresAt DateTime
+  appointment           Appointment?
+}
+
+model Appointment {
+  id              String         @id @default(uuid())
+  workshopId      String
+  vehicleId       String
+  vehicle         Vehicle        @relation(fields: [vehicleId], references: [id])
+  alertId         String?        @unique
+  alert           AlertSchedule? @relation(fields: [alertId], references: [id])
+  scheduledAt     DateTime
+  durationMinutes Int            @default(60)
+  status          ApptStatus     @default(PENDING)
+  googleEventId   String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+}
